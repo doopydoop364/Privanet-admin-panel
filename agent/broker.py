@@ -465,7 +465,7 @@ def _search_status() -> dict[str, Any]:
                 break
     except OSError:
         pass
-    headers = {"Accept": "application/json", "User-Agent": "PrivaNet-Chat-Admin-Broker/0.3.2"}
+    headers = {"Accept": "application/json", "User-Agent": "PrivaNet-Chat-Admin-Broker/0.3.3"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(base + "/status", headers=headers, method="GET")
