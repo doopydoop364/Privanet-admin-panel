@@ -221,7 +221,7 @@ jobs:
           - staged/canary updates can be implemented without requiring lock-step upgrades of every node.
           EOF
 
-          python -m pip install --disable-pip-version-check -e '.[test]'
+          python -m pip install --disable-pip-version-check 'mcp>=2.0,<3' 'pydantic>=2.10,<3' 'pytest>=8,<9'
           python -m compileall -q agent authorize.py twofactor.py
           python -m pytest -q
 
