@@ -465,7 +465,7 @@ def test_server_mcp_app_is_fullscreen_capable_and_no_elicitation():
     assert 'requestDisplayMode' in text
     assert 'Open fullscreen' in text
     assert 'ChatGPT kept this approval inline' in text
-    assert \"terminalState=['approved','denied','expired']\" in text
+    assert "terminalState=['approved','denied','expired']" in text
     assert 'request_admin_access' in text and 'request_action_confirmation' in text and 'request_sudo_command' in text
     assert 'grant_sudo_command' in text and 'visibility=["app"]' in text
     assert 'context.elicit' not in text and '.elicit(' not in text
