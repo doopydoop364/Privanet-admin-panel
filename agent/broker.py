@@ -36,6 +36,8 @@ SCOPES = {
     "system.sudo",
 }
 
+APPROVAL_SCOPES = SCOPES - {"privanet.updates", "system.sudo"}
+
 REQUIRED_SCOPE = {
     "service.restart": "privanet.services",
     "admin.node.approve": "privanet.nodes",
@@ -44,9 +46,13 @@ REQUIRED_SCOPE = {
     "admin.node.revoke": "privanet.nodes",
     "node.slots.set": "privanet.node_local",
     "node.slots.clear": "privanet.node_local",
-    "update.apply": "privanet.updates",
     "package.install": "system.packages",
     "root.run": "system.sudo",
+}
+
+AUTO_SCOPE = {
+    "update.apply": "privanet.updates",
+    "update.self_apply": "privanet.updates",
 }
 
 
@@ -490,7 +496,7 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
     if action == "auth.prepare":
         scope = str(params.get("scope", ""))
         reason = str(params.get("reason", "")).strip()[:500]
-        if scope not in SCOPES - {"system.sudo"} or not reason:
+        if scope not in APPROVAL_SCOPES or not reason:
             raise ValueError("invalid authorization request")
         req_id = "req_" + secrets.token_hex(16)
         created = int(time.time())
@@ -755,6 +761,17 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
     if action == "update.check":
         return _run_unit("privanet-chat-admin-update-check.service", 7200)
 
+    if action == "update.self_check":
+        result = _run(["/usr/local/bin/privanet-chat-admin-update", "--check"], timeout=120)
+        _audit(action, "privanet.updates", session_key, result["ok"], result["stderr"] or result["stdout"])
+        return {
+            "ok": result["ok"],
+            "scope": "privanet.updates",
+            "authorization": "automatic",
+            "output": result["stdout"],
+            "error": result["stderr"] or None,
+        }
+
     if action == "root.run":
         sudo_request_id = str(params.get("sudo_request_id", ""))
         try:
@@ -785,7 +802,7 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
     authorization_request_id = params.get("authorization_request_id")
     confirmation_request_id = params.get("confirmation_request_id")
     lease = _require_scope(action, authorization_request_id, consume=not destructive)
-    scope = REQUIRED_SCOPE.get(action)
+    scope = REQUIRED_SCOPE.get(action) or AUTO_SCOPE.get(action)
 
     if action == "service.restart":
         unit = _service_alias(str(params.get("service", "")))
@@ -857,8 +874,22 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
     if action == "update.apply":
         result = _run_unit("privanet-update.service", 7200)
         _audit(action, scope, session_key, result["ok"], result.get("output", "")[-3000:] or str(result.get("error") or ""))
-        result["lease"] = lease
+        result["scope"] = scope
+        result["authorization"] = "automatic"
         return result
+
+    if action == "update.self_apply":
+        result = _run(["systemctl", "start", "--no-block", "privanet-chat-admin-self-update.service"], timeout=30)
+        _audit(action, scope, session_key, result["ok"], "queued self-update" if result["ok"] else result["stderr"])
+        return {
+            "ok": result["ok"],
+            "scope": scope,
+            "authorization": "automatic",
+            "state": "STARTED" if result["ok"] else "FAILED",
+            "unit": "privanet-chat-admin-self-update.service",
+            "output": result["stdout"],
+            "error": result["stderr"] or None,
+        }
 
     if action == "package.install":
         package = str(params.get("package", "")).strip().lower()
