@@ -39,10 +39,14 @@ import json, re, sys, urllib.parse
 with open(sys.argv[1], encoding='utf-8') as f:
     data = json.load(f)
 version = data.get('version')
+release_version = data.get('releaseVersion', version)
 url = data.get('url')
 sha = data.get('sha256')
-if not isinstance(version, str) or not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?', version):
+version_pattern = r'\d+(?:\.\d+){2,3}(?:-[0-9A-Za-z.-]+)?'
+if not isinstance(version, str) or not re.fullmatch(version_pattern, version):
     raise SystemExit('invalid manifest version')
+if not isinstance(release_version, str) or not re.fullmatch(version_pattern, release_version):
+    raise SystemExit('invalid manifest releaseVersion')
 if not isinstance(url, str):
     raise SystemExit('invalid manifest URL')
 p = urllib.parse.urlsplit(url)
@@ -50,7 +54,7 @@ if p.scheme != 'https' or p.hostname != 'doopydoop364.github.io' or p.username o
     raise SystemExit('manifest URL origin refused')
 if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-fA-F]{64}', sha):
     raise SystemExit('invalid manifest sha256')
-print(version)
+print(release_version)
 print(url)
 print(sha.lower())
 PY

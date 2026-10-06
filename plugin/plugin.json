@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "privanet-admin",
-  "version": "0.3.3",
+  "version": "0.3.3.1",
   "description": "Conversational administration for a private PrivaNet deployment with a sandboxed command shell, scoped interactive authorization, diagnostics, and audited privileged operations.",
   "author": {
     "name": "PrivaNet"
@@ -11,7 +11,7 @@
       "interface": {
         "displayName": "PrivaNet Admin",
         "shortDescription": "Sandboxed PrivaNet server admin",
-        "longDescription": "Conversational PrivaNet administration with an unprivileged command sandbox, capability-based temporary elevation, explicit fullscreen approval retry controls, per-command TOTP-gated root execution, audited maintenance, node diagnostics, PrivaSearch health, and verified updates.",
+        "longDescription": "Conversational PrivaNet administration with an unprivileged command sandbox, capability-based temporary elevation, explicit fullscreen approval retry controls, per-command TOTP-gated root execution, audited maintenance, node diagnostics, PrivaSearch health, and zero-prompt verified update paths.",
         "developerName": "PrivaNet",
         "category": "Developer Tools",
         "capabilities": [
@@ -21,7 +21,7 @@
           "Check my PrivaNet deployment and summarize anything that needs attention.",
           "Diagnose my nodes and show version drift without making changes.",
           "Run read-only server diagnostics in the sandboxed shell.",
-          "Check for verified updates and ask me before applying them."
+          "Check for verified updates and apply them when I ask."
         ]
       }
     }

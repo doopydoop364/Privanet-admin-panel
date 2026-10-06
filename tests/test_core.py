@@ -171,10 +171,10 @@ def test_verified_updates_are_automatic_under_update_scope(tmp_path):
 
 def test_chat_admin_self_update_is_typed_and_automatic(tmp_path):
     br=FakeBroker()
-    br.set('update.self_check',{'ok':True,'output':'Installed: 0.3.3\nPublished: 0.3.3\nStatus: up to date\n','error':None})
+    br.set('update.self_check',{'ok':True,'output':'Installed: 0.3.3.1\nPublished: 0.3.3.1\nStatus: up to date\n','error':None})
     b=backend(tmp_path,broker=br)
     status=b.chat_admin_update_status()
-    assert status['installed']=='0.3.3' and status['published']=='0.3.3'
+    assert status['installed']=='0.3.3.1' and status['published']=='0.3.3.1'
     assert status['authorization']=='automatic'
     assert br.calls[-1]==('update.self_check',{},'session-default')
     br.set('update.self_apply',{'ok':True,'scope':'privanet.updates','authorization':'automatic','state':'STARTED','unit':'privanet-chat-admin-self-update.service','error':None})
@@ -283,10 +283,17 @@ def test_broker_root_command_is_explicitly_2fa_gated():
     assert 'sudo ALL' not in text and 'NOPASSWD' not in text
 
 
-def test_versions_are_032():
-    assert 'VERSION = "0.3.3"' in Path('agent/core.py').read_text()
-    assert 'VERSION=0.3.3' in Path('deploy.sh').read_text()
-    assert json.loads(Path('plugin/plugin.json').read_text())['version']=='0.3.3'
+def test_versions_are_0331():
+    assert 'VERSION = "0.3.3.1"' in Path('agent/core.py').read_text()
+    assert 'VERSION=0.3.3.1' in Path('deploy.sh').read_text()
+    assert json.loads(Path('plugin/plugin.json').read_text())['version']=='0.3.3.1'
+
+
+def test_updater_supports_four_part_versions_and_legacy_alias():
+    text=Path('update.sh').read_text()
+    assert "release_version = data.get('releaseVersion', version)" in text
+    assert "version_pattern = r'\\d+(?:\\.\\d+){2,3}" in text
+    assert "print(release_version)" in text
 
 
 def test_deploy_installs_2fa_helper_and_secret_path():

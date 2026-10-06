@@ -1,4 +1,4 @@
-# PrivaNet Chat Admin v0.3.3
+# PrivaNet Chat Admin v0.3.3.1
 
 PrivaNet Chat Admin is a private MCP server for administering a PrivaNet deployment from ChatGPT. v0.3.3 keeps the v0.3.2 capability and TOTP security model while improving approval-card display negotiation, mobile state visibility, and retry behavior when ChatGPT keeps a confirmation inline.
 
