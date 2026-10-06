@@ -29,7 +29,7 @@ SCOPES = {
     "privanet.services": "Restart allowlisted PrivaNet services.",
     "privanet.nodes": "Approve, deny, rename, or revoke PrivaNet nodes.",
     "privanet.node_local": "Change the local PrivaNet node's saved job-slot setting.",
-    "privanet.updates": "Install verified Priva application updates.",
+    "privanet.updates": "Install verified Priva application and Chat Admin updates.",
     "system.packages": "Install a package from the server's configured APT repositories.",
     "system.sudo": "Run one exact non-interactive root command after per-command two-factor approval.",
 }
@@ -275,6 +275,7 @@ class AdminBackend:
         for lease in result.get("leases", []):
             lease["remainingSeconds"] = max(0, int(lease.get("expiresAt", now)) - now)
         result["availableScopes"] = SCOPES
+        result["scopePolicies"] = {scope: ("automatic" if scope == "privanet.updates" else "step-up-2fa" if scope == "system.sudo" else "approval") for scope in SCOPES}
         result["executedAs"] = "privanet-chat"
         return result
 
@@ -284,8 +285,8 @@ class AdminBackend:
         return self.broker_call("auth.check", {"request_id": request_id, "scope": scope}, session_key=session_key)
 
     def prepare_authorization(self, scope: str, reason: str, session_key: str) -> dict[str, Any]:
-        if scope not in SCOPES or scope == "system.sudo":
-            raise ValueError("Unknown or unsupported scoped authorization")
+        if scope not in SCOPES or scope in {"privanet.updates", "system.sudo"}:
+            raise ValueError("Unknown or non-interactive authorization scope")
         reason = reason.strip()
         if not reason or len(reason) > 500:
             raise ValueError("Authorization reason must be 1-500 characters")
@@ -668,14 +669,56 @@ class AdminBackend:
         result = self.broker_call("logs.read", {"service": "updater", "lines": limit})
         return {"ok": result.get("ok", False), "events": self._json_lines(str(result.get("logs", ""))), "error": result.get("error")}
 
-    def apply_updates(self, authorization_request_id: str, session_key: str) -> dict[str, Any]:
+    def apply_updates(self, session_key: str = "session-default") -> dict[str, Any]:
         prerequisite = self._updater_prerequisite_error()
         if prerequisite is not None:
             return prerequisite
-        result = self.broker_call("update.apply", {"authorization_request_id": authorization_request_id}, session_key=session_key)
+        result = self.broker_call("update.apply", {}, session_key=session_key)
         events = self._json_lines(str(result.get("output", "")))
-        self.audit.write("apply_updates", "priva-apps", {}, bool(result.get("ok")), json.dumps(events)[:4000])
-        return {"ok": result.get("ok", False), "apps": [e for e in events if isinstance(e, dict) and e.get("app")], "events": events, "error": result.get("error")}
+        self.audit.write("apply_updates", "priva-apps", {"scope": "privanet.updates", "authorization": "automatic"}, bool(result.get("ok")), json.dumps(events)[:4000])
+        return {
+            "ok": result.get("ok", False),
+            "scope": "privanet.updates",
+            "authorization": "automatic",
+            "apps": [e for e in events if isinstance(e, dict) and e.get("app")],
+            "events": events,
+            "error": result.get("error"),
+        }
+
+    def chat_admin_update_status(self) -> dict[str, Any]:
+        result = self.broker_call("update.self_check")
+        values: dict[str, str] = {}
+        for raw in str(result.get("output", "")).splitlines():
+            if ":" in raw:
+                key, value = raw.split(":", 1)
+                values[key.strip().lower()] = value.strip()
+        return {
+            "ok": result.get("ok", False),
+            "scope": "privanet.updates",
+            "authorization": "automatic",
+            "installed": values.get("installed"),
+            "published": values.get("published"),
+            "status": values.get("status"),
+            "error": redact(str(result.get("error"))) if result.get("error") else None,
+        }
+
+    def apply_chat_admin_update(self, session_key: str = "session-default") -> dict[str, Any]:
+        result = self.broker_call("update.self_apply", {}, session_key=session_key)
+        self.audit.write(
+            "apply_chat_admin_update",
+            "chat-admin",
+            {"scope": "privanet.updates", "authorization": "automatic"},
+            bool(result.get("ok")),
+            str(result.get("error") or result.get("state") or ""),
+        )
+        return {
+            "ok": result.get("ok", False),
+            "scope": "privanet.updates",
+            "authorization": "automatic",
+            "state": result.get("state"),
+            "unit": result.get("unit"),
+            "error": redact(str(result.get("error"))) if result.get("error") else None,
+        }
 
     def install_package(self, package: str, authorization_request_id: str, confirmation_request_id: str | None, session_key: str) -> dict[str, Any]:
         package = package.strip().lower()
