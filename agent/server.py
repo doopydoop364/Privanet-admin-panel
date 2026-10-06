@@ -256,7 +256,7 @@ apps = Apps()
     description="Show an inline PrivaNet approval card for a scoped temporary administrative lease. This tool does not grant access by itself.",
 )
 def request_admin_access(
-    scope: Literal["privanet.services", "privanet.nodes", "privanet.node_local", "privanet.updates", "system.packages"],
+    scope: Literal["privanet.services", "privanet.nodes", "privanet.node_local", "system.packages"],
     reason: str,
     context: Context[Any, Any],
 ) -> dict[str, Any]:
@@ -606,14 +606,21 @@ async def restart_service(service: str, context: Context[Any, Any], authorizatio
 
 
 @mcp.tool()
-async def apply_available_updates(context: Context[Any, Any], authorization_request_id: str | None = None) -> dict[str, Any]:
-    """Install verified Priva updates after scoped interactive approval if needed."""
-    ok, auth = _ensure_scope(context, "privanet.updates", "Install verified Priva application updates; services may restart", authorization_request_id)
-    if not ok:
-        return auth
-    result = backend.apply_updates(str(authorization_request_id), _session_key(context))
-    result["authorization"] = auth
-    return result
+async def apply_available_updates(context: Context[Any, Any]) -> dict[str, Any]:
+    """Install verified Priva application updates with the automatic privanet.updates policy."""
+    return backend.apply_updates(_session_key(context))
+
+
+@mcp.tool()
+def get_chat_admin_update_status() -> dict[str, Any]:
+    """Check the installed and published PrivaNet Chat Admin versions."""
+    return backend.chat_admin_update_status()
+
+
+@mcp.tool()
+async def update_chat_admin(context: Context[Any, Any]) -> dict[str, Any]:
+    """Start the verified PrivaNet Chat Admin self-updater without an approval prompt."""
+    return backend.apply_chat_admin_update(_session_key(context))
 
 
 @mcp.tool()
