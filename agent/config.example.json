@@ -1,0 +1,49 @@
+{
+  "audit_db": "/var/lib/privanet-chat-admin/audit.sqlite3",
+  "command_home": "/var/lib/privanet-chat-shell",
+  "command_cwd": "/var/lib/privanet-chat-shell/work",
+  "local_node_state_dir": "/var/lib/privanet-node",
+  "command_path": "/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+  "managed_services": {
+    "coordinator": "privanet-coordinator.service",
+    "node": "privanet-node.service",
+    "roundup": "privanet-roundup.service",
+    "search": "privasearch.service",
+    "proxy": "privaproxy.service",
+    "updater": "privanet-update.service"
+  },
+  "executables": {
+    "privanet_admin": "/usr/local/bin/privanet-admin",
+    "privanet_node": "/opt/privanet-node/current/bin/privanet-node",
+    "privanet_update": "/usr/local/bin/privanet-update"
+  },
+  "broker": {
+    "socket": "/run/privanet-chat-admin/broker.sock",
+    "timeout_seconds": 10
+  },
+  "privasearch": {
+    "base_url": "http://127.0.0.1:4020",
+    "env_file": "/etc/privasearch/privasearch.env"
+  },
+  "diagnostic_paths": [
+    "/",
+    "/var",
+    "/opt"
+  ],
+  "limits": {
+    "max_log_lines": 300,
+    "max_job_slots": 32,
+    "command_timeout_seconds": 20,
+    "max_command_timeout_seconds": 60,
+    "update_timeout_seconds": 7200,
+    "http_timeout_seconds": 5,
+    "http_max_bytes": 2097152
+  },
+  "updater": {
+    "config_file": "/etc/privanet/updater.json"
+  },
+  "shell": {
+    "socket": "/run/privanet-chat-shell/shell.sock",
+    "timeout_seconds": 70
+  }
+}

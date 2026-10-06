@@ -1,0 +1,29 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "privanet-admin",
+  "version": "0.3.2",
+  "description": "Conversational administration for a private PrivaNet deployment with a sandboxed command shell, scoped interactive authorization, diagnostics, and audited privileged operations.",
+  "author": {
+    "name": "PrivaNet"
+  },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "PrivaNet Admin",
+        "shortDescription": "Sandboxed PrivaNet server admin",
+        "longDescription": "Conversational PrivaNet administration with an unprivileged command sandbox, fullscreen-capable MCP App approval cards, capability-based temporary elevation that survives transport session changes, per-command TOTP-gated root execution, audited maintenance, node diagnostics, PrivaSearch health, and verified updates.",
+        "developerName": "PrivaNet",
+        "category": "Developer Tools",
+        "capabilities": [
+          "Interactive"
+        ],
+        "defaultPrompt": [
+          "Check my PrivaNet deployment and summarize anything that needs attention.",
+          "Diagnose my nodes and show version drift without making changes.",
+          "Run read-only server diagnostics in the sandboxed shell.",
+          "Check for verified updates and ask me before applying them."
+        ]
+      }
+    }
+  }
+}
