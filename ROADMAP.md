@@ -21,7 +21,7 @@ A core design principle remains:
 
 # 0.3.x — Finish the local administration foundation
 
-Current published baseline: **0.3.2**
+Current published baseline: **0.3.3.1** (published manifest `releaseVersion`; its `version` alias is `0.3.3-hotfix.1`)
 
 0.3.x should remain focused on making the existing local-server administration model dependable, understandable, and safe. Major new distributed-control protocol work should generally be deferred to 0.4.0.
 
@@ -559,3 +559,10 @@ Before implementing major 0.4.0 work:
 6. only then convert roadmap items into implementation tasks
 
 The roadmap should be updated as those decisions become clearer.
+
+
+---
+
+# Design proposal status
+
+A 0.4 design proposal, draft ADRs (`docs/adr/proposed/`) and a draft Core-side proposal are in `docs/design/` and `docs/adr/proposed/`. Review found verified 0.3.x defects (notably unauthenticated local self-approval of scoped leases); the proposal's Stage 0 lists them. Nothing there is accepted or implemented yet.
