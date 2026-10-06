@@ -57,7 +57,7 @@ def _ensure_scope(
     }
 
 
-APP_URI = "ui://privanet-admin/approval-v2.html"
+APP_URI = "ui://privanet-admin/approval-v3.html"
 APP_HTML = r'''<!doctype html>
 <html lang="en">
 <head>
@@ -67,13 +67,13 @@ APP_HTML = r'''<!doctype html>
 <style>
 :root{font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:light dark}
 *{box-sizing:border-box}body{margin:0;padding:14px;background:transparent;color:inherit}.card{border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:18px;padding:18px;max-width:720px;margin:0 auto;background:color-mix(in srgb,Canvas 97%,transparent);box-shadow:0 6px 24px rgba(0,0,0,.08)}
-.head{display:flex;gap:10px;align-items:center;margin-bottom:12px}.badge{font-size:12px;font-weight:750;padding:4px 8px;border-radius:999px;background:color-mix(in srgb,#6b5cff 18%,transparent)}h2{font-size:19px;margin:0}.muted{opacity:.72;font-size:13px;line-height:1.5}.scope{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;padding:9px 11px;border-radius:11px;background:color-mix(in srgb,currentColor 7%,transparent);overflow-wrap:anywhere}.reason{margin:13px 0;line-height:1.5}.command{white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,currentColor 8%,transparent);margin:12px 0}.choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.choices label{border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:10px;padding:10px;font-size:13px;cursor:pointer}.field{margin:14px 0}.field label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}.field input{width:100%;font:inherit;font-size:18px;letter-spacing:.16em;padding:10px 12px;border-radius:10px;border:1px solid color-mix(in srgb,currentColor 20%,transparent);background:Canvas;color:CanvasText}.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}button{border:0;border-radius:11px;padding:10px 14px;font-weight:700;cursor:pointer}button.primary{background:#6b5cff;color:white}button.secondary{background:color-mix(in srgb,currentColor 10%,transparent);color:inherit}button:disabled{opacity:.5;cursor:not-allowed}.status{margin-top:10px;font-size:13px;min-height:18px}.danger{border-color:color-mix(in srgb,#d33 55%,transparent)}.warning{margin-top:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,#d33 10%,transparent);font-size:13px;line-height:1.45}.timer{font-size:12px;opacity:.65;margin-top:8px}
-@media(max-width:700px){body{padding:12px}.card{max-width:none;min-height:calc(100vh - 24px)}.choices{grid-template-columns:1fr}.actions{flex-direction:column-reverse}button{width:100%;padding:13px}.scope{font-size:14px}}
+.head{display:flex;gap:10px;align-items:center;margin-bottom:12px}.badge{font-size:12px;font-weight:750;padding:4px 8px;border-radius:999px;background:color-mix(in srgb,#6b5cff 18%,transparent)}h2{font-size:19px;margin:0;flex:1}.state-pill{font-size:12px;font-weight:750;padding:4px 8px;border-radius:999px;background:color-mix(in srgb,currentColor 9%,transparent)}.state-pill.approved{background:color-mix(in srgb,#18a558 18%,transparent)}.state-pill.denied,.state-pill.expired,.state-pill.error{background:color-mix(in srgb,#d33 14%,transparent)}.muted{opacity:.72;font-size:13px;line-height:1.5}.scope{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;padding:9px 11px;border-radius:11px;background:color-mix(in srgb,currentColor 7%,transparent);overflow-wrap:anywhere}.reason{margin:13px 0;line-height:1.5}.command{white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,currentColor 8%,transparent);margin:12px 0}.choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.choices label{border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:10px;padding:10px;font-size:13px;cursor:pointer}.field{margin:14px 0}.field label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}.field input{width:100%;font:inherit;font-size:18px;letter-spacing:.16em;padding:10px 12px;border-radius:10px;border:1px solid color-mix(in srgb,currentColor 20%,transparent);background:Canvas;color:CanvasText}.display-actions{display:flex;gap:10px;align-items:center;margin-top:12px}.display-note{font-size:12px;opacity:.72;line-height:1.4;flex:1}.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}button{border:0;border-radius:11px;padding:10px 14px;font-weight:700;cursor:pointer}button.primary{background:#6b5cff;color:white}button.secondary{background:color-mix(in srgb,currentColor 10%,transparent);color:inherit}button:disabled{opacity:.5;cursor:not-allowed}.status{margin-top:10px;font-size:13px;min-height:18px}.danger{border-color:color-mix(in srgb,#d33 55%,transparent)}.warning{margin-top:12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,#d33 10%,transparent);font-size:13px;line-height:1.45}.timer{font-size:12px;opacity:.65;margin-top:8px}
+@media(max-width:700px){body{padding:12px}.card{max-width:none;min-height:calc(100vh - 24px)}.head{align-items:flex-start;flex-wrap:wrap}.state-pill{margin-left:auto}.choices{grid-template-columns:1fr}.display-actions{align-items:stretch;flex-direction:column}.actions{flex-direction:column-reverse}button{width:100%;padding:13px}.scope{font-size:14px}}
 </style>
 </head>
 <body>
 <div class="card" id="card">
-  <div class="head"><span class="badge">PrivaNet Admin</span><h2 id="title">Permission request</h2></div>
+  <div class="head"><span class="badge">PrivaNet Admin</span><h2 id="title">Permission request</h2><span class="state-pill" id="state">Pending</span></div>
   <div class="scope" id="scope">Loading request…</div>
   <div class="reason" id="reason"></div>
   <div class="muted" id="details"></div>
@@ -81,6 +81,7 @@ APP_HTML = r'''<!doctype html>
   <div class="warning" id="warning" hidden></div>
   <div class="choices" id="choices"></div>
   <div class="field" id="totpField" hidden><label for="totp">Authenticator code</label><input id="totp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000"><div class="muted">Enter the current 6-digit code from the authenticator you enrolled locally on the server.</div></div>
+  <div class="display-actions" id="displayActions"><button class="secondary" id="fullscreen">Open fullscreen</button><div class="display-note" id="displayNote"></div></div>
   <div class="actions"><button class="secondary" id="deny">Deny</button><button class="primary" id="approve">Approve</button></div>
   <div class="status" id="status"></div>
   <div class="timer" id="timer"></div>
@@ -88,7 +89,7 @@ APP_HTML = r'''<!doctype html>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  let payload = null, fullscreenRequested = false, timerHandle = null;
+  let payload = null, fullscreenAutoRequested = false, timerHandle = null, terminalState = null;
   const extract = value => {
     if (!value) return null;
     if (value.structuredContent && typeof value.structuredContent === 'object') return value.structuredContent;
@@ -102,6 +103,17 @@ APP_HTML = r'''<!doctype html>
   };
   const current = () => extract(window.openai?.toolOutput) || extract(window.openai?.toolResponseMetadata?.mcp_tool_result);
   const setBusy = busy => { $('approve').disabled = busy; $('deny').disabled = busy; };
+  const setState = (state, message='') => {
+    const pill=$('state'); pill.textContent=state[0].toUpperCase()+state.slice(1); pill.className=`state-pill ${state}`;
+    if (message) $('status').textContent=message;
+    terminalState=['approved','denied','expired'].includes(state)?state:null;
+  };
+  const failureMessage = result => {
+    const msg=result?.error || result?.message || 'Approval was not completed.';
+    const code=result?.code || result?.error?.code;
+    if (code==='AUTHORIZATION_REQUEST_INVALID' || /expired or invalid/i.test(String(msg))) return 'This approval request expired or was already used. Ask ChatGPT to create a new request.';
+    return String(msg);
+  };
   const call = async (name, args) => {
     if (!window.openai?.callTool) throw new Error('This ChatGPT client does not expose widget tool calls.');
     return extract(await window.openai.callTool(name, args));
@@ -109,11 +121,39 @@ APP_HTML = r'''<!doctype html>
   const followUp = async text => {
     if (window.openai?.sendFollowUpMessage) await window.openai.sendFollowUpMessage({prompt:text,scrollToBottom:true});
   };
-  const maybeFullscreen = async () => {
-    if (fullscreenRequested) return; fullscreenRequested = true;
+  const requestFullscreen = async (manual=false) => {
+    const button=$('fullscreen');
+    if (!window.openai?.requestDisplayMode) {
+      button.hidden=true;
+      $('displayNote').textContent='This ChatGPT client does not expose fullscreen switching for this approval.';
+      return null;
+    }
+    if (!manual && fullscreenAutoRequested) return null;
+    if (!manual) fullscreenAutoRequested=true;
+    button.hidden=false; button.disabled=true;
+    if (manual) $('displayNote').textContent='Requesting fullscreen…';
     try {
-      if (window.openai?.requestDisplayMode) await window.openai.requestDisplayMode({mode:'fullscreen'});
-    } catch {}
+      const result=await window.openai.requestDisplayMode({mode:'fullscreen'});
+      const mode=(typeof result==='string'?result:result?.mode) || window.openai?.displayMode || null;
+      if (mode==='fullscreen') {
+        button.hidden=true;
+        $('displayNote').textContent='Fullscreen approval view active.';
+      } else {
+        button.hidden=false;
+        $('displayNote').textContent=manual
+          ? 'ChatGPT kept this approval inline. You can still review and approve it safely here.'
+          : 'ChatGPT opened this approval inline. Use Open fullscreen to try again.';
+      }
+      return mode;
+    } catch (e) {
+      button.hidden=false;
+      $('displayNote').textContent=manual
+        ? `Fullscreen request was not accepted: ${e?.message || e}`
+        : 'ChatGPT kept this approval inline. Use Open fullscreen to try again.';
+      return null;
+    } finally {
+      if (!terminalState) button.disabled=false;
+    }
   };
   const startTimer = () => {
     if (timerHandle) clearInterval(timerHandle);
@@ -122,15 +162,16 @@ APP_HTML = r'''<!doctype html>
       const left=Math.max(0, Number(payload.expiresAt)*1000-Date.now());
       const sec=Math.ceil(left/1000);
       $('timer').textContent=sec>0?`Request expires in ${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`:'Request expired. Ask ChatGPT to create a new approval request.';
-      if (sec<=0) setBusy(true);
+      if (sec<=0 && !terminalState) { setBusy(true); $('fullscreen').disabled=true; setState('expired','This request expired before approval. Ask ChatGPT to create a new one.'); }
     }; tick(); timerHandle=setInterval(tick,1000);
   };
   const render = () => {
     const next = current(); if (next) payload = next;
     if (!payload) { $('status').textContent='Waiting for request data…'; setBusy(true); return; }
-    setBusy(false); maybeFullscreen(); startTimer();
+    if (!terminalState) setBusy(false); requestFullscreen(false); startTimer();
     const destructive = payload.kind === 'confirmation';
     const sudo = payload.kind === 'sudo';
+    if (!terminalState) setState('pending', sudo?'2FA approval required.':destructive?'Sensitive-action confirmation required.':'Administrative approval required.');
     $('title').textContent = sudo ? 'Root command approval' : destructive ? 'Confirm sensitive action' : 'Administrative access request';
     $('card').classList.toggle('danger', destructive || sudo);
     $('scope').textContent = sudo ? 'system.sudo' : destructive ? `${payload.action} · ${payload.target}` : payload.scope;
@@ -152,7 +193,7 @@ APP_HTML = r'''<!doctype html>
     }
   };
   $('approve').addEventListener('click', async () => {
-    if (!payload) return; setBusy(true); $('status').textContent='Approving…';
+    if (!payload || terminalState) return; setBusy(true); $('fullscreen').disabled=true; setState('pending','Approving…');
     try {
       let result;
       if (payload.kind === 'confirmation') {
@@ -166,9 +207,9 @@ APP_HTML = r'''<!doctype html>
         const duration=document.querySelector('input[name="duration"]:checked')?.value || 'once';
         result = await call('grant_admin_access',{request_id:payload.requestId,duration});
       }
-      if (!result?.ok) throw new Error(result?.error || result?.message || 'Approval was not granted.');
-      $('status').textContent='Approved. ChatGPT can retry the requested action.';
-      $('approve').disabled=true; $('deny').disabled=true;
+      if (!result?.ok) { const err=new Error(failureMessage(result)); err.code=result?.code || result?.error?.code; throw err; }
+      setState('approved','Approved. ChatGPT can retry the requested action.');
+      $('approve').disabled=true; $('deny').disabled=true; $('fullscreen').disabled=true;
       if (payload.kind === 'sudo') {
         await followUp(`PrivaNet root command approval was granted for sudo_request_id=${payload.requestId}. Run run_sudo_command with that exact sudo_request_id and verify the result.`);
       } else if (payload.kind === 'confirmation') {
@@ -176,18 +217,27 @@ APP_HTML = r'''<!doctype html>
       } else {
         await followUp(`PrivaNet administrative access was approved for authorization_request_id=${payload.requestId}. Retry the operation that requested ${payload.scope} with that authorization_request_id and verify its result.`);
       }
-    } catch (e) { $('status').textContent=`Approval failed: ${e?.message || e}`; setBusy(false); }
+    } catch (e) {
+      const msg=e?.message || String(e);
+      if (/expired|already used|no longer valid/i.test(msg)) { setBusy(true); $('fullscreen').disabled=true; setState('expired',msg); }
+      else { setState('error',`Approval failed: ${msg}`); setBusy(false); $('fullscreen').disabled=false; }
+    }
   });
   $('deny').addEventListener('click', async () => {
-    if (!payload) return; setBusy(true); $('status').textContent='Denying…';
+    if (!payload || terminalState) return; setBusy(true); $('fullscreen').disabled=true; setState('pending','Denying…');
     try {
       const name=payload.kind==='confirmation'?'deny_action_confirmation':payload.kind==='sudo'?'deny_sudo_command':'deny_admin_access';
       const result=await call(name,{request_id:payload.requestId});
-      if (!result?.ok) throw new Error(result?.error || result?.message || 'Denial failed.');
-      $('status').textContent='Denied. No privileged action was performed.';
-      $('approve').disabled=true; $('deny').disabled=true;
-    } catch (e) { $('status').textContent=`Could not record denial: ${e?.message || e}`; setBusy(false); }
+      if (!result?.ok) { const err=new Error(failureMessage(result)); err.code=result?.code || result?.error?.code; throw err; }
+      setState('denied','Denied. No privileged action was performed.');
+      $('approve').disabled=true; $('deny').disabled=true; $('fullscreen').disabled=true;
+    } catch (e) {
+      const msg=e?.message || String(e);
+      if (/expired|already used|no longer valid/i.test(msg)) { setBusy(true); $('fullscreen').disabled=true; setState('expired',msg); }
+      else { setState('error',`Could not record denial: ${msg}`); setBusy(false); $('fullscreen').disabled=false; }
+    }
   });
+  $('fullscreen').addEventListener('click', async () => { await requestFullscreen(true); });
   window.addEventListener('openai:set_globals', render, {passive:true});
   render(); setTimeout(render,100);
 })();
@@ -368,7 +418,7 @@ apps.add_resource(
         uri=APP_URI,
         name="PrivaNet Admin approval",
         title="PrivaNet Admin approval",
-        description="Scoped authorization, sensitive-action confirmation, and 2FA root-command approval card.",
+        description="Scoped authorization, sensitive-action confirmation, and 2FA root-command approval card with explicit fullscreen retry controls.",
         mime_type="text/html;profile=mcp-app",
         text=APP_HTML,
         meta={

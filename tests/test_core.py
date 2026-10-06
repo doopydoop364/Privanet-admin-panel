@@ -258,9 +258,9 @@ def test_broker_root_command_is_explicitly_2fa_gated():
 
 
 def test_versions_are_032():
-    assert 'VERSION = "0.3.2"' in Path('agent/core.py').read_text()
-    assert 'VERSION=0.3.2' in Path('deploy.sh').read_text()
-    assert json.loads(Path('plugin/plugin.json').read_text())['version']=='0.3.2'
+    assert 'VERSION = "0.3.3"' in Path('agent/core.py').read_text()
+    assert 'VERSION=0.3.3' in Path('deploy.sh').read_text()
+    assert json.loads(Path('plugin/plugin.json').read_text())['version']=='0.3.3'
 
 
 def test_deploy_installs_2fa_helper_and_secret_path():
@@ -460,9 +460,12 @@ def test_sudo_wrong_code_is_rejected(tmp_path, monkeypatch):
 def test_server_mcp_app_is_fullscreen_capable_and_no_elicitation():
     text=Path('agent/server.py').read_text()
     assert 'Apps()' in text
-    assert 'ui://privanet-admin/approval-v2.html' in text
+    assert 'ui://privanet-admin/approval-v3.html' in text
     assert 'availableDisplayModes": ["inline", "fullscreen"]' in text
     assert 'requestDisplayMode' in text
+    assert 'Open fullscreen' in text
+    assert 'ChatGPT kept this approval inline' in text
+    assert "terminalState=['approved','denied','expired']" in text
     assert 'request_admin_access' in text and 'request_action_confirmation' in text and 'request_sudo_command' in text
     assert 'grant_sudo_command' in text and 'visibility=["app"]' in text
     assert 'context.elicit' not in text and '.elicit(' not in text

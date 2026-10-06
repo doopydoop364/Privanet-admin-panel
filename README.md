@@ -1,6 +1,15 @@
-# PrivaNet Chat Admin v0.3.2
+# PrivaNet Chat Admin v0.3.3
 
-PrivaNet Chat Admin is a private MCP server for administering a PrivaNet deployment from ChatGPT. v0.3.2 keeps the three-process privilege boundary from v0.3 while fixing approval continuity across changing MCP transport sessions, preferring a fullscreen approval experience, and adding separately protected per-command root execution with TOTP step-up authentication.
+PrivaNet Chat Admin is a private MCP server for administering a PrivaNet deployment from ChatGPT. v0.3.3 keeps the v0.3.2 capability and TOTP security model while improving approval-card display negotiation, mobile state visibility, and retry behavior when ChatGPT keeps a confirmation inline.
+
+## v0.3.3 changes
+
+- **Explicit fullscreen retry:** approval cards still request fullscreen automatically, but now also expose an **Open fullscreen** control when the host keeps the card inline.
+- **Host-result feedback:** the card reports whether fullscreen was accepted or whether ChatGPT chose to keep the view inline.
+- **Clear approval states:** Pending, Approved, Denied, Expired, and Error states are visible and terminal states are not accidentally re-enabled by later host-global refreshes.
+- **Better expiry handling:** expired requests disable mutation controls and explain that ChatGPT must create a new request.
+- **Mobile approval polish:** state and fullscreen controls adapt to narrow screens while preserving the inline fallback.
+- **Development packaging fix:** setuptools now explicitly packages only the `agent` package, allowing normal editable/test installs from the source repository.
 
 ## v0.3.2 changes
 
@@ -85,7 +94,7 @@ General root execution is intentionally separate from the normal scope leases.
 
 ### Enroll 2FA locally
 
-After installing v0.3.2, run this **on the server as root**:
+After installing v0.3.3, run this **on the server as root**:
 
 ```bash
 privanet-chat-admin-2fa setup
@@ -192,7 +201,7 @@ v0.3 includes:
 - cleaner fresh `get_update_status`
 - combined frontend/broker audit reporting
 
-Remote nodes can be inspected and diagnosed. The current Core coordinator still does not expose a safe central operation for changing another node's local slot/resource policy, so v0.3.2 does not fake that capability with SSH.
+Remote nodes can be inspected and diagnosed. The current Core coordinator still does not expose a safe central operation for changing another node's local slot/resource policy, so v0.3.3 does not fake that capability with SSH.
 
 ## Install / upgrade
 
