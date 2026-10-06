@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-VERSION = "0.3.2"
+VERSION = "0.3.3"
 
 SECRET_PATTERNS = [
     re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s]+"),
