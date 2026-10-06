@@ -221,7 +221,7 @@ jobs:
           - staged/canary updates can be implemented without requiring lock-step upgrades of every node.
           EOF
 
-          python -m compileall -q agent authorize.py twofactor.py
+          python -m pip install --disable-pip-version-check -e '.[test]'\n          python -m compileall -q agent authorize.py twofactor.py
           python -m pytest -q
 
       - name: Commit imported baseline and remove importer
