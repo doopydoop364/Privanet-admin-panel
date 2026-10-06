@@ -1,0 +1,236 @@
+name: Import PrivaNet Chat Admin v0.3.2 baseline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/import-chat-admin-v0.3.2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Import verified v0.3.2 source and architecture decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://doopydoop364.github.io/privanet-chat-admin-v0.3.2.zip -o /tmp/privanet-chat-admin-v0.3.2.zip
+          echo '662142dd396641ad5e20ff3ea3fb8bc5858264f39f4a3bc3a3d03fc7b58eb252  /tmp/privanet-chat-admin-v0.3.2.zip' | sha256sum -c -
+          unzip -q /tmp/privanet-chat-admin-v0.3.2.zip -d /tmp/privanet-chat-admin-v0.3.2
+          cp -a /tmp/privanet-chat-admin-v0.3.2/privanet-chat-admin/. .
+
+          cat >> README.md <<'EOF'
+
+          ## Repository roadmap
+
+          Development planning for the remainder of 0.3.x and the 0.4.0 operator-plane architecture lives in [ROADMAP.md](./ROADMAP.md).
+
+          The 0.4 architecture decisions are recorded under [docs/adr](./docs/adr/).
+          EOF
+
+          mkdir -p docs/adr
+
+          cat > docs/adr/0001-management-plane-boundary.md <<'EOF'
+          # ADR 0001: PrivaNet Admin is the management plane, not the Core control plane
+
+          - Status: Accepted for 0.4 planning
+          - Date: 2026-10-06
+
+          ## Context
+
+          PrivaNet Core already owns the network control plane: node identity, enrollment, authentication, capabilities, heartbeats, scheduler state, jobs, leases, resource policy enforcement, and coordinator-to-node protocol behavior.
+
+          Chat Admin needs to grow beyond a collection of local MCP tools without duplicating or replacing those responsibilities.
+
+          ## Decision
+
+          PrivaNet Admin will be a separate **management/operator plane** layered above PrivaNet Core.
+
+          Core owns authoritative network facts and mechanisms. Admin owns operator policy, approvals, diagnosis, orchestration, runbook state, update planning, backup orchestration, and cross-application correlation.
+
+          ChatGPT/MCP is a client of the Admin service, not the authority that defines PrivaNet state.
+
+          The local root broker remains a separate minimal privileged process. It executes narrowly validated privileged operations; it does not contain diagnosis or orchestration logic.
+
+          ## Consequences
+
+          - Core remains usable without Chat Admin.
+          - Admin can eventually support clients other than ChatGPT, such as a web UI or CLI.
+          - Admin must query Core for live authoritative node/job state instead of maintaining a competing copy.
+          - Cross-application reasoning belongs in Admin adapters, not in Core.
+          - PrivaSearch, PrivaProxy, and PrivaDrive remain separate applications; Core must not learn application-specific policy such as crawler frontier semantics.
+          EOF
+
+          cat > docs/adr/0002-authorization-model.md <<'EOF'
+          # ADR 0002: Partially trusted Admin with scoped capabilities for privileged actions
+
+          - Status: Accepted for 0.4 planning
+          - Date: 2026-10-06
+
+          ## Context
+
+          Chat Admin 0.3 already separates an unprivileged bridge from a root broker and supports request-bound authorization plus one-shot TOTP-protected root commands.
+
+          A future Admin service will become more capable, so treating the whole Admin process as permanently omnipotent would unnecessarily enlarge the blast radius of a compromise.
+
+          ## Decision
+
+          0.4 will use a **partially trusted** model:
+
+          - read-only and low-risk inspection may be performed by the Admin service with its normal authenticated service identity;
+          - ordinary mutations require explicit scoped authorization according to policy;
+          - high-risk operations use narrow, target-bound, short-lived capabilities that are independently checked by the receiving authority or broker;
+          - raw root execution remains exact-command-bound, one-shot, short-lived, and TOTP-protected;
+          - destructive actions may require a second confirmation and/or TOTP even when a broader operator scope is already active.
+
+          The project may move additional operations toward capability-everything later, but 0.4 does not require every harmless mutation to carry a signed single-use capability from day one.
+
+          ## Security invariants
+
+          - no permanent reusable root token exposed to ChatGPT;
+          - no TOTP seed exposed to ChatGPT;
+          - approval is not inferred from a model/tool request alone;
+          - action, target, scope, expiry, and use count are broker/server validated;
+          - high-risk capabilities cannot be broadened by the Admin client after approval.
+          EOF
+
+          cat > docs/adr/0003-remote-node-management-transport.md <<'EOF'
+          # ADR 0003: Remote node administration is typed and coordinator-mediated
+
+          - Status: Accepted for 0.4 planning
+          - Date: 2026-10-06
+
+          ## Context
+
+          External PrivaNodes should not require inbound ports, a VPN, or direct SSH connectivity for normal administration. Nodes already maintain an authenticated relationship with the Coordinator.
+
+          ## Decision
+
+          Remote-node administration will use **typed, versioned, capability-scoped operations mediated by the Coordinator**.
+
+          Initial operations may include inspection, drain/resume, job-slot policy, maintenance mode, bounded diagnostics, daemon restart requests, and verified update requests.
+
+          The protocol must not introduce a general arbitrary remote shell.
+
+          The first implementation may use queued/polled management operations over the node's existing outbound relationship. A persistent control stream may be introduced later if latency requirements justify it.
+
+          ## Consequences
+
+          - remote administration works through NAT without opening worker-node inbound ports;
+          - Core owns protocol schemas, authentication, replay protection, compatibility, and authoritative operation state;
+          - Admin owns the higher-level plan that decides when those operations should be used;
+          - unsupported operations must be reported as unsupported rather than simulated through hidden SSH/shell fallbacks.
+          EOF
+
+          cat > docs/adr/0004-admin-persistence.md <<'EOF'
+          # ADR 0004: Admin has its own SQLite state, but Core remains authoritative for live network state
+
+          - Status: Accepted for 0.4 planning
+          - Date: 2026-10-06
+
+          ## Context
+
+          A management plane needs durable information that does not belong in the Core scheduler database: approval policy, correlated audit history, runbook progress, configuration history, update attempts, backup catalog metadata, and eventually operator identities.
+
+          Duplicating authoritative node/job state would create consistency problems.
+
+          ## Decision
+
+          PrivaNet Admin will use its own durable database, initially SQLite.
+
+          Admin-owned state may include:
+
+          - authorization policy and approval records;
+          - runbook instances and checkpoints;
+          - audit correlation metadata;
+          - configuration history and rollback metadata;
+          - update/deployment history;
+          - backup catalog metadata;
+          - diagnostic history;
+          - future operator identity/role data.
+
+          Admin will not treat its database as authoritative for whether a node currently exists, is online, or is running a job. Those facts come from Core and the relevant application APIs.
+
+          ## Recovery property
+
+          If the Admin database is lost, PrivaNet Core must continue operating. Loss of Admin state may lose history/policy/runbook progress, but must not corrupt the live network control plane.
+          EOF
+
+          cat > docs/adr/0005-runbook-failure-semantics.md <<'EOF'
+          # ADR 0005: Mutating workflows are checkpointed, idempotent where possible, and verified after each risky step
+
+          - Status: Accepted for 0.4 planning
+          - Date: 2026-10-06
+
+          ## Context
+
+          0.4 will introduce multi-step workflows such as draining and updating a node. Nodes, services, the Coordinator, or the Admin process may disappear mid-operation. Blind retry can duplicate destructive work; assuming success can leave the deployment in an unknown state.
+
+          ## Decision
+
+          Admin runbooks will be explicit state machines with durable checkpoints.
+
+          Each mutating step should define:
+
+          - a stable operation/runbook ID;
+          - preconditions;
+          - whether the step is idempotent;
+          - timeout and retry policy;
+          - observable success criteria;
+          - post-step verification;
+          - rollback/compensation behavior where actually possible;
+          - an explicit UNKNOWN/NEEDS_OPERATOR state when safety cannot be established automatically.
+
+          A timeout is not success. A lost connection after sending a command must be reconciled against authoritative state before retrying.
+
+          Rollback must never be promised for operations that are not genuinely reversible.
+
+          ## Initial vertical-slice expectations
+
+          For drain/resume and job-slot changes, Admin should be able to resume a runbook after its own restart and determine whether the requested state was already reached before issuing another mutation.
+          EOF
+
+          cat > docs/adr/0006-capability-and-version-negotiation.md <<'EOF'
+          # ADR 0006: Admin discovers supported operations and versions; it does not assume a homogeneous fleet
+
+          - Status: Accepted for 0.4 planning
+          - Date: 2026-10-06
+
+          ## Context
+
+          Real deployments will temporarily contain mixed Coordinator, node, Search, Proxy, Drive, and Admin versions. 0.4 remote administration must not assume that every target supports every newly added operation.
+
+          ## Decision
+
+          Core/node management operations will be versioned and discoverable.
+
+          Admin should determine support from advertised capabilities/protocol information before offering or executing a mutation. Unsupported operations return a structured unsupported/compatibility result.
+
+          Update orchestration must use an explicit compatibility model rather than simple lexical version comparison.
+
+          New management protocol fields and operations should be additive when practical. Breaking changes require an explicit protocol/version transition and migration path.
+
+          ## Consequences
+
+          - mixed-version fleets become an expected condition, not an exceptional one;
+          - the persistent Admin UI and MCP tools can explain why an operation is unavailable;
+          - staged/canary updates can be implemented without requiring lock-step upgrades of every node.
+          EOF
+
+          python -m compileall -q agent authorize.py twofactor.py
+          python -m pytest -q
+
+      - name: Commit imported baseline and remove importer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git rm .github/workflows/import-chat-admin-v0.3.2.yml
+          git commit -m 'Import Chat Admin v0.3.2 source and architecture ADRs'
+          git push
