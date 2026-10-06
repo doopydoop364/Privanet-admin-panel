@@ -249,6 +249,8 @@ privanet-chat-admin-update
 
 The updater reads `https://doopydoop364.github.io/privanet-chat-admin-latest.json`, verifies the release origin and SHA-256, extracts it, and runs `deploy.sh` with rollback support.
 
+From ChatGPT, verified updates are classified under the `privanet.updates` scope but use an **automatic policy**: they do not open an approval card and do not require TOTP. This applies only to the fixed verified update paths. Arbitrary package installation and arbitrary root commands keep their separate confirmation/2FA requirements.
+
 ## Model-visible MCP tools
 
 ### Overall / diagnostics
@@ -306,6 +308,8 @@ The TOTP grant/deny helpers are app-only.
 - `get_update_history`
 - `get_update_schedule`
 - `apply_available_updates`
+- `get_chat_admin_update_status`
+- `update_chat_admin`
 - `install_system_package`
 
 ## Validation
