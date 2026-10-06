@@ -92,6 +92,25 @@ fi
 [[ -f authorize.py ]] && install -m 0755 -o root -g root authorize.py /usr/local/bin/privanet-chat-admin-authorize
 [[ -f twofactor.py ]] && install -m 0755 -o root -g root twofactor.py /usr/local/bin/privanet-chat-admin-2fa
 
+cat > /etc/systemd/system/privanet-chat-admin-self-update.service <<UNIT
+[Unit]
+Description=Apply verified PrivaNet Chat Admin self-update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/sleep 2
+ExecStart=/usr/local/bin/privanet-chat-admin-update
+UMask=0022
+PrivateTmp=true
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictRealtime=true
+LockPersonality=true
+
+UNIT
+
 cat > /etc/systemd/system/privanet-chat-admin-broker.service <<UNIT
 [Unit]
 Description=PrivaNet Chat Admin privileged broker

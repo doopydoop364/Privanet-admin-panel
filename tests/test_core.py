@@ -159,6 +159,31 @@ def test_update_check_reports_missing_prerequisites(tmp_path):
     assert b.check_updates()['events'][0]['code']=='UPDATER_NOT_INSTALLED'
 
 
+def test_verified_updates_are_automatic_under_update_scope(tmp_path):
+    br=FakeBroker()
+    br.set('update.apply',{'ok':True,'output':'{"app":"core","code":"UPDATED"}\n','error':None})
+    out=backend(tmp_path,broker=br).apply_updates('mcp_audit123')
+    assert out['ok'] is True
+    assert out['scope']=='privanet.updates'
+    assert out['authorization']=='automatic'
+    assert br.calls[-1]==('update.apply',{},'mcp_audit123')
+
+
+def test_chat_admin_self_update_is_typed_and_automatic(tmp_path):
+    br=FakeBroker()
+    br.set('update.self_check',{'ok':True,'output':'Installed: 0.3.3\nPublished: 0.3.3\nStatus: up to date\n','error':None})
+    b=backend(tmp_path,broker=br)
+    status=b.chat_admin_update_status()
+    assert status['installed']=='0.3.3' and status['published']=='0.3.3'
+    assert status['authorization']=='automatic'
+    assert br.calls[-1]==('update.self_check',{},'session-default')
+    br.set('update.self_apply',{'ok':True,'scope':'privanet.updates','authorization':'automatic','state':'STARTED','unit':'privanet-chat-admin-self-update.service','error':None})
+    out=b.apply_chat_admin_update('mcp_audit123')
+    assert out['ok'] is True and out['state']=='STARTED'
+    assert out['scope']=='privanet.updates' and out['authorization']=='automatic'
+    assert br.calls[-1]==('update.self_apply',{},'mcp_audit123')
+
+
 def test_privasearch_status_secret_stays_in_broker(tmp_path):
     br=FakeBroker(); br.set('search.status',{'ok':True,'http_status':200,'data':{'frontier':{'PENDING':12}},'error':None})
     out=backend(tmp_path,broker=br).privasearch_status()
@@ -185,6 +210,7 @@ def test_authorization_round_trip_backend(tmp_path):
 def test_unknown_authorization_scope_rejected(tmp_path):
     with pytest.raises(ValueError): backend(tmp_path).prepare_authorization('root.shell','x','mcp_audit123')
     with pytest.raises(ValueError): backend(tmp_path).prepare_authorization('system.sudo','x','mcp_audit123')
+    with pytest.raises(ValueError): backend(tmp_path).prepare_authorization('privanet.updates','x','mcp_audit123')
 
 
 def test_confirmation_backend_carries_authorization_id(tmp_path):
@@ -268,6 +294,8 @@ def test_deploy_installs_2fa_helper_and_secret_path():
     assert 'privanet-chat-admin-2fa' in text
     assert 'PRIVANET_CHAT_ADMIN_TOTP_SECRET=$BROKER_STATE_DIR/totp.secret' in text
     assert 'install -d -o root -g root -m 0700 "$BROKER_STATE_DIR"' in text
+    assert 'privanet-chat-admin-self-update.service' in text
+    assert 'ExecStart=/usr/local/bin/privanet-chat-admin-update' in text
 
 
 def test_deploy_migrates_existing_audit_ownership():
@@ -325,10 +353,48 @@ def test_broker_denies_privileged_action_without_capability(tmp_path, monkeypatc
         broker.handle({'action':'service.restart','params':{'service':'node'},'session_key':'mcp_12345678'})
 
 
+def test_broker_verified_update_does_not_require_capability(tmp_path, monkeypatch):
+    import agent.broker as broker
+    monkeypatch.setattr(broker,'STATE_DB',str(tmp_path/'broker.sqlite3'))
+    monkeypatch.setattr(broker,'_run_unit',lambda unit,start_timeout:{'ok':True,'state':{'Result':'success'},'output':'updated','error':None})
+    out=broker.handle({'action':'update.apply','params':{},'session_key':'mcp_session_A'})
+    assert out['ok'] is True
+    assert out['scope']=='privanet.updates'
+    assert out['authorization']=='automatic'
+
+
+def test_broker_self_update_uses_only_fixed_systemd_unit(tmp_path, monkeypatch):
+    import agent.broker as broker
+    monkeypatch.setattr(broker,'STATE_DB',str(tmp_path/'broker.sqlite3'))
+    calls=[]
+    def fake_run(argv,timeout=60,env=None):
+        calls.append((argv,timeout))
+        return {'ok':True,'code':0,'stdout':'','stderr':''}
+    monkeypatch.setattr(broker,'_run',fake_run)
+    out=broker.handle({'action':'update.self_apply','params':{'command':'id -u','url':'https://example.com/evil.zip'},'session_key':'mcp_session_A'})
+    assert out['ok'] is True
+    assert out['scope']=='privanet.updates'
+    assert out['authorization']=='automatic'
+    assert calls==[(['systemctl','start','--no-block','privanet-chat-admin-self-update.service'],30)]
+
+
+def test_broker_self_update_check_uses_fixed_updater_path(tmp_path, monkeypatch):
+    import agent.broker as broker
+    monkeypatch.setattr(broker,'STATE_DB',str(tmp_path/'broker.sqlite3'))
+    calls=[]
+    def fake_run(argv,timeout=60,env=None):
+        calls.append((argv,timeout))
+        return {'ok':True,'code':0,'stdout':'Installed: 0.3.3\nPublished: 0.3.3\nStatus: up to date\n','stderr':''}
+    monkeypatch.setattr(broker,'_run',fake_run)
+    out=broker.handle({'action':'update.self_check','params':{'url':'https://example.com/evil.json'},'session_key':'mcp_session_A'})
+    assert out['ok'] is True
+    assert calls==[(['/usr/local/bin/privanet-chat-admin-update','--check'],120)]
+
+
 def test_broker_rejects_replayed_authorization_request(tmp_path, monkeypatch):
     import agent.broker as broker
     monkeypatch.setattr(broker,'STATE_DB',str(tmp_path/'broker.sqlite3'))
-    prep=broker.handle({'action':'auth.prepare','params':{'scope':'privanet.updates','reason':'updates'},'session_key':'mcp_session_A'})
+    prep=broker.handle({'action':'auth.prepare','params':{'scope':'privanet.services','reason':'restart'},'session_key':'mcp_session_A'})
     broker.handle({'action':'auth.grant','params':{'request_id':prep['requestId'],'duration':'once'},'session_key':'mcp_session_B'})
     with pytest.raises(PermissionError):
         broker.handle({'action':'auth.grant','params':{'request_id':prep['requestId'],'duration':'once'},'session_key':'mcp_session_C'})
@@ -467,6 +533,8 @@ def test_server_mcp_app_is_fullscreen_capable_and_no_elicitation():
     assert 'ChatGPT kept this approval inline' in text
     assert "terminalState=['approved','denied','expired']" in text
     assert 'request_admin_access' in text and 'request_action_confirmation' in text and 'request_sudo_command' in text
+    assert 'get_chat_admin_update_status' in text and 'update_chat_admin' in text
+    assert 'async def apply_available_updates(context: Context[Any, Any])' in text
     assert 'grant_sudo_command' in text and 'visibility=["app"]' in text
     assert 'context.elicit' not in text and '.elicit(' not in text
 
@@ -490,6 +558,7 @@ def test_skill_requires_capability_ids_and_sudo_2fa():
     assert 'confirmation_request_id' in text
     assert 'request_sudo_command' in text and 'run_sudo_command' in text
     assert 'privanet-chat-admin-2fa setup' in text
+    assert 'Never call `request_admin_access` or request TOTP merely to run' in text
     assert 'Never ask them to paste' in text
 
 
