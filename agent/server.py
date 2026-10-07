@@ -171,6 +171,7 @@ APP_HTML = r'''<!doctype html>
     if (!terminalState) setBusy(false); requestFullscreen(false); startTimer();
     const destructive = payload.kind === 'confirmation';
     const sudo = payload.kind === 'sudo';
+    const sensitiveApproval = payload.kind === 'authorization' && ['privanet.nodes','privanet.updates','system.packages'].includes(payload.scope);
     if (!terminalState) setState('pending', sudo?'2FA approval required.':destructive?'Sensitive-action confirmation required.':'Administrative approval required.');
     $('title').textContent = sudo ? 'Root command approval' : destructive ? 'Confirm sensitive action' : 'Administrative access request';
     $('card').classList.toggle('danger', destructive || sudo);
@@ -180,10 +181,12 @@ APP_HTML = r'''<!doctype html>
       ? 'This approval applies to the exact command shown below, once. The command will run non-interactively as root only after the 2FA code is verified.'
       : destructive
         ? 'This confirmation is valid for this exact action and target once.'
-        : `${payload.allows || ''} The command sandbox remains the unprivileged privanet-shell account; this does not enable root command execution.`;
+        : sensitiveApproval
+          ? `${payload.allows || ''} This high-impact legacy scope also requires a fresh TOTP code verified by the root broker.`
+          : `${payload.allows || ''} The command sandbox remains the unprivileged privanet-shell account; this does not enable root command execution.`;
     $('command').hidden=!sudo; $('command').textContent=sudo?(payload.command||''):'';
     $('warning').hidden=!sudo; $('warning').textContent=sudo?'Root commands can modify or delete system data, credentials, services, and software. Command output is returned to ChatGPT. Approve only if the exact command is expected and does not expose secrets you do not want in chat.':'';
-    $('totpField').hidden=!sudo;
+    $('totpField').hidden=!(sudo || sensitiveApproval);
     const box=$('choices'); box.innerHTML='';
     if (!destructive && !sudo) {
       [['once','This action only'],['15m','15 minutes'],['30m','30 minutes'],['60m','1 hour']].forEach(([v,label],i)=>{
@@ -205,7 +208,13 @@ APP_HTML = r'''<!doctype html>
         $('totp').value='';
       } else {
         const duration=document.querySelector('input[name="duration"]:checked')?.value || 'once';
-        result = await call('grant_admin_access',{request_id:payload.requestId,duration});
+        const args={request_id:payload.requestId,duration};
+        if (['privanet.nodes','privanet.updates','system.packages'].includes(payload.scope)) {
+          const code=$('totp').value.trim();
+          if (!/^[0-9]{6}$/.test(code)) throw new Error('Enter a 6-digit authenticator code for this high-impact approval.');
+          args.totp_code=code; $('totp').value='';
+        }
+        result = await call('grant_admin_access',args);
       }
       if (!result?.ok) { const err=new Error(failureMessage(result)); err.code=result?.code || result?.error?.code; throw err; }
       setState('approved','Approved. ChatGPT can retry the requested action.');
@@ -256,7 +265,7 @@ apps = Apps()
     description="Show an inline PrivaNet approval card for a scoped temporary administrative lease. This tool does not grant access by itself.",
 )
 def request_admin_access(
-    scope: Literal["privanet.services", "privanet.nodes", "privanet.node_local", "system.packages"],
+    scope: Literal["privanet.services", "privanet.nodes", "privanet.node_local", "privanet.updates", "system.packages"],
     reason: str,
     context: Context[Any, Any],
 ) -> dict[str, Any]:
@@ -281,9 +290,9 @@ def request_admin_access(
     meta={"openai/outputTemplate": APP_URI, "openai/widgetAccessible": True},
     description="App-only helper that grants a previously prepared PrivaNet authorization request after the user presses Approve.",
 )
-def grant_admin_access(request_id: str, duration: Literal["once", "15m", "30m", "60m"], context: Context[Any, Any]) -> dict[str, Any]:
+def grant_admin_access(request_id: str, duration: Literal["once", "15m", "30m", "60m"], context: Context[Any, Any], totp_code: str | None = None) -> dict[str, Any]:
     try:
-        return backend.grant_authorization(request_id, duration, _session_key(context))
+        return backend.grant_authorization(request_id, duration, _session_key(context), totp_code)
     except BrokerError as exc:
         return {"ok": False, "code": exc.code, "error": str(exc)}
 
@@ -618,9 +627,17 @@ def get_chat_admin_update_status() -> dict[str, Any]:
 
 
 @mcp.tool()
-async def update_chat_admin(context: Context[Any, Any]) -> dict[str, Any]:
-    """Start the verified PrivaNet Chat Admin self-updater without an approval prompt."""
-    return backend.apply_chat_admin_update(_session_key(context))
+async def update_chat_admin(context: Context[Any, Any], authorization_request_id: str | None = None) -> dict[str, Any]:
+    """Start the Chat Admin self-updater after a broker-verified TOTP approval for the update scope."""
+    ok, auth = _ensure_scope(context, "privanet.updates", "Update PrivaNet Chat Admin", authorization_request_id)
+    if not ok:
+        return auth
+    try:
+        result = backend.apply_chat_admin_update(str(authorization_request_id), _session_key(context))
+    except BrokerError as exc:
+        return {"ok": False, "code": exc.code, "error": str(exc)}
+    result["authorization"] = auth
+    return result
 
 
 @mcp.tool()
