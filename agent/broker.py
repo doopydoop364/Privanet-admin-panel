@@ -36,7 +36,8 @@ SCOPES = {
     "system.sudo",
 }
 
-APPROVAL_SCOPES = SCOPES - {"privanet.updates", "system.sudo"}
+APPROVAL_SCOPES = SCOPES - {"system.sudo"}
+SENSITIVE_APPROVAL_SCOPES = {"privanet.nodes", "privanet.updates", "system.packages"}
 
 REQUIRED_SCOPE = {
     "service.restart": "privanet.services",
@@ -47,12 +48,12 @@ REQUIRED_SCOPE = {
     "node.slots.set": "privanet.node_local",
     "node.slots.clear": "privanet.node_local",
     "package.install": "system.packages",
+    "update.self_apply": "privanet.updates",
     "root.run": "system.sudo",
 }
 
 AUTO_SCOPE = {
     "update.apply": "privanet.updates",
-    "update.self_apply": "privanet.updates",
 }
 
 
@@ -531,6 +532,8 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
             ).fetchone()
             if row is None or row[4] or now - row[3] > 300 or row[1] == "system.sudo":
                 raise PermissionError("authorization request expired or invalid")
+            if row[1] in SENSITIVE_APPROVAL_SCOPES:
+                _verify_totp(params.get("totp_code"))
             seconds, uses = durations[duration]
             lease_id = "lease_" + secrets.token_hex(16)
             db.execute("UPDATE auth_requests SET consumed=1 WHERE id=?", (req_id,))
@@ -539,8 +542,9 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
                 (lease_id, now, now + seconds, row[0], row[1], row[2], uses, req_id),
             )
             db.commit()
-        _audit("auth.grant", row[1], row[0], True, f"request={req_id}; duration={duration}; {row[2]}")
-        return {"ok": True, "requestId": req_id, "scope": row[1], "expiresAt": now + seconds, "duration": duration, "usesRemaining": uses}
+        step_up = "; 2fa=verified" if row[1] in SENSITIVE_APPROVAL_SCOPES else ""
+        _audit("auth.grant", row[1], row[0], True, f"request={req_id}; duration={duration}{step_up}; {row[2]}")
+        return {"ok": True, "requestId": req_id, "scope": row[1], "expiresAt": now + seconds, "duration": duration, "usesRemaining": uses, "stepUp": "TOTP" if row[1] in SENSITIVE_APPROVAL_SCOPES else None}
 
     if action == "auth.deny":
         req_id = _clean_request_id(params.get("request_id"), "req_")
@@ -820,7 +824,7 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
             argv += ["--label", _label(params.get("label"))]
         argv.append("--json")
         result = _admin(argv)
-        _audit(action, scope, session_key, result["ok"], code)
+        _audit(action, scope, session_key, result["ok"], f"request={code}; capabilities={','.join(caps)}; label={params.get('label') or ''}")
         return {"ok": result["ok"], "data": _json_output(result), "error": result["stderr"] or None, "lease": lease}
 
     if action == "admin.node.deny":
@@ -884,7 +888,7 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
         return {
             "ok": result["ok"],
             "scope": scope,
-            "authorization": "automatic",
+            "authorization": "interactive-2fa",
             "state": "STARTED" if result["ok"] else "FAILED",
             "unit": "privanet-chat-admin-self-update.service",
             "output": result["stdout"],

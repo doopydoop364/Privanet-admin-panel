@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION=0.3.3.1
+VERSION=0.3.3.2
 PREFIX=${PREFIX:-/opt/privanet-chat-admin}
 CONFIG_DIR=${CONFIG_DIR:-/etc/privanet-chat-admin}
 STATE_DIR=${STATE_DIR:-/var/lib/privanet-chat-admin}
