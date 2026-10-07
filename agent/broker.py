@@ -824,7 +824,7 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
             argv += ["--label", _label(params.get("label"))]
         argv.append("--json")
         result = _admin(argv)
-        _audit(action, scope, session_key, result["ok"], f"request={code}; capabilities={\',\'.join(caps)}; label={params.get(\'label\') or \'\'}")
+        _audit(action, scope, session_key, result["ok"], f"request={code}; capabilities={','.join(caps)}; label={params.get('label') or ''}")
         return {"ok": result["ok"], "data": _json_output(result), "error": result["stderr"] or None, "lease": lease}
 
     if action == "admin.node.deny":
