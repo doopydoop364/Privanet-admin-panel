@@ -25,9 +25,16 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-for cmd in curl unzip sha256sum python3; do
+for cmd in curl unzip sha256sum python3 flock; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "Missing required command: $cmd" >&2; exit 1; }
 done
+
+install -d -m 0755 /run/lock
+exec 9>/run/lock/privanet-chat-admin-update.lock
+if ! flock -n 9; then
+  echo "Another PrivaNet Chat Admin update is already running." >&2
+  exit 1
+fi
 
 TMP=$(mktemp -d /tmp/privanet-chat-admin-update.XXXXXX)
 trap 'rm -rf "$TMP"' EXIT
@@ -78,6 +85,81 @@ fi
 
 echo "Installed: $CURRENT"
 echo "Published: $LATEST"
+
+if [[ "$CURRENT" != "none" ]]; then
+  VERSION_CHECK=$(python3 - "$CURRENT" "$LATEST" <<'PY'
+import re, sys
+current, latest = sys.argv[1:3]
+pat = re.compile(r'^(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:-[0-9A-Za-z.-]+)?
+  [[ "$CURRENT" == "$LATEST" ]] && echo "Status: up to date" || echo "Status: update available"
+  exit 0
+fi
+
+if [[ $EUID -ne 0 ]]; then
+  echo "Run as root to install updates." >&2
+  exit 1
+fi
+
+if [[ "$CURRENT" == "$LATEST" && $FORCE -ne 1 ]]; then
+  echo "Already up to date."
+  exit 0
+fi
+
+curl -fsSL --proto '=https' --tlsv1.2 "$URL" -o "$TMP/release.zip"
+ACTUAL_SHA=$(sha256sum "$TMP/release.zip" | awk '{print $1}')
+if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+  echo "SHA256 mismatch; refusing update." >&2
+  exit 1
+fi
+
+unzip -q "$TMP/release.zip" -d "$TMP/unpacked"
+DEPLOY="$TMP/unpacked/privanet-chat-admin/deploy.sh"
+if [[ ! -f "$DEPLOY" || ! -f "$TMP/unpacked/privanet-chat-admin/agent/core.py" ]]; then
+  echo "Unexpected release layout; refusing update." >&2
+  exit 1
+fi
+
+cd "$TMP/unpacked/privanet-chat-admin"
+chmod +x deploy.sh
+./deploy.sh
+
+if systemctl is-enabled --quiet privanet-chat-admin.service 2>/dev/null; then
+  systemctl enable --now privanet-chat-admin.service >/dev/null
+fi
+if systemctl is-active --quiet privanet-chat-admin.service; then
+  echo "PrivaNet Chat Admin is active on version $LATEST."
+else
+  echo "Update installed, but privanet-chat-admin.service is not active." >&2
+  exit 1
+fi
+)
+cm, lm = pat.fullmatch(current), pat.fullmatch(latest)
+if not cm or not lm:
+    raise SystemExit("installed or published version is not comparable")
+def key(m):
+    return tuple(int(x or 0) for x in m.groups())
+ck, lk = key(cm), key(lm)
+if ck[:2] != lk[:2]:
+    print("wrong-series")
+elif lk < ck:
+    print("downgrade")
+elif lk == ck:
+    print("same")
+else:
+    print("newer")
+PY
+)
+  case "$VERSION_CHECK" in
+    wrong-series)
+      echo "Refusing cross-series self-update from $CURRENT to $LATEST." >&2
+      exit 1
+      ;;
+    downgrade)
+      echo "Refusing downgrade from $CURRENT to $LATEST." >&2
+      exit 1
+      ;;
+  esac
+fi
 
 if [[ $CHECK_ONLY -eq 1 ]]; then
   [[ "$CURRENT" == "$LATEST" ]] && echo "Status: up to date" || echo "Status: update available"
