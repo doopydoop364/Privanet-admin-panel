@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-VERSION = "0.3.3.1"
+VERSION = "0.3.3.2"
 
 SECRET_PATTERNS = [
     re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s]+"),
@@ -275,7 +275,7 @@ class AdminBackend:
         for lease in result.get("leases", []):
             lease["remainingSeconds"] = max(0, int(lease.get("expiresAt", now)) - now)
         result["availableScopes"] = SCOPES
-        result["scopePolicies"] = {scope: ("automatic" if scope == "privanet.updates" else "step-up-2fa" if scope == "system.sudo" else "approval") for scope in SCOPES}
+        result["scopePolicies"] = {scope: ("step-up-2fa" if scope in {"privanet.nodes", "privanet.updates", "system.packages", "system.sudo"} else "approval") for scope in SCOPES}
         result["executedAs"] = "privanet-chat"
         return result
 
@@ -285,15 +285,18 @@ class AdminBackend:
         return self.broker_call("auth.check", {"request_id": request_id, "scope": scope}, session_key=session_key)
 
     def prepare_authorization(self, scope: str, reason: str, session_key: str) -> dict[str, Any]:
-        if scope not in SCOPES or scope in {"privanet.updates", "system.sudo"}:
+        if scope not in SCOPES or scope == "system.sudo":
             raise ValueError("Unknown or non-interactive authorization scope")
         reason = reason.strip()
         if not reason or len(reason) > 500:
             raise ValueError("Authorization reason must be 1-500 characters")
         return self.broker_call("auth.prepare", {"scope": scope, "reason": reason}, session_key=session_key)
 
-    def grant_authorization(self, request_id: str, duration: str, session_key: str = "session-default") -> dict[str, Any]:
-        return self.broker_call("auth.grant", {"request_id": request_id, "duration": duration}, session_key=session_key)
+    def grant_authorization(self, request_id: str, duration: str, session_key: str = "session-default", totp_code: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"request_id": request_id, "duration": duration}
+        if totp_code is not None:
+            params["totp_code"] = totp_code
+        return self.broker_call("auth.grant", params, session_key=session_key)
 
     def deny_authorization(self, request_id: str, session_key: str = "session-default") -> dict[str, Any]:
         return self.broker_call("auth.deny", {"request_id": request_id}, session_key=session_key)
@@ -523,6 +526,10 @@ class AdminBackend:
         status = str(node.get("status", "UNKNOWN"))
         if status == "REVOKED":
             issues.append({"severity": "critical", "code": "REVOKED", "message": "The node is revoked and cannot authenticate."})
+        elif status == "STALE":
+            issues.append({"severity": "warning", "code": "STALE", "message": "The node heartbeat is stale. Check connectivity and node service health."})
+        elif status == "DRAINING":
+            issues.append({"severity": "info", "code": "DRAINING", "message": "The node is draining and may intentionally stop accepting new work."})
         elif status not in {"ONLINE", "OFFLINE_EXPECTED"}:
             issues.append({"severity": "warning", "code": "OFFLINE", "message": f"Node status is {status}. Check connectivity, service state, and enrollment."})
         slots = int(node.get("jobSlots") or 0)
@@ -531,7 +538,8 @@ class AdminBackend:
             issues.append({"severity": "warning", "code": "NO_SLOTS", "message": "The node advertises no job slots."})
         elif jobs >= slots:
             issues.append({"severity": "info", "code": "SLOTS_FULL", "message": "All advertised job slots are currently occupied."})
-        pressure = str(node.get("pressure") or node.get("resourcePressure") or "").upper()
+        resources = node.get("resources") if isinstance(node.get("resources"), dict) else {}
+        pressure = str(resources.get("pressure") or node.get("pressure") or node.get("resourcePressure") or "").upper()
         if pressure in {"ELEVATED", "HIGH", "CRITICAL"}:
             issues.append({"severity": "warning", "code": "RESOURCE_PRESSURE", "message": f"The node reports {pressure.lower()} resource pressure."})
         if not issues:
@@ -542,12 +550,24 @@ class AdminBackend:
         listing = self.list_nodes(include_revoked=False)
         nodes = listing.get("nodes", []) if listing.get("ok") else []
         versions: dict[str, list[str]] = {}
+        protocols: dict[str, list[str]] = {}
         for node in nodes:
             if not isinstance(node, dict):
                 continue
+            name = str(node.get("displayName") or node.get("nodeId") or "unknown")
             version = str(node.get("daemonVersion") or "unknown")
-            versions.setdefault(version, []).append(str(node.get("displayName") or node.get("nodeId") or "unknown"))
-        return {"ok": listing.get("ok", False), "versions": versions, "drift": len([v for v in versions if v != "unknown"]) > 1, "error": listing.get("error")}
+            protocol = str(node.get("protocolVersion") or "unknown")
+            versions.setdefault(version, []).append(name)
+            protocols.setdefault(protocol, []).append(name)
+        known_protocols = [p for p in protocols if p != "unknown"]
+        return {
+            "ok": listing.get("ok", False),
+            "versions": versions,
+            "protocols": protocols,
+            "drift": len(known_protocols) > 1,
+            "daemonVersionDifferences": len([v for v in versions if v != "unknown"]) > 1,
+            "error": listing.get("error"),
+        }
 
     def local_node_slots(self) -> dict[str, Any]:
         result = self.broker_call("node.slots.show")
@@ -702,19 +722,19 @@ class AdminBackend:
             "error": redact(str(result.get("error"))) if result.get("error") else None,
         }
 
-    def apply_chat_admin_update(self, session_key: str = "session-default") -> dict[str, Any]:
-        result = self.broker_call("update.self_apply", {}, session_key=session_key)
+    def apply_chat_admin_update(self, authorization_request_id: str, session_key: str = "session-default") -> dict[str, Any]:
+        result = self.broker_call("update.self_apply", {"authorization_request_id": authorization_request_id}, session_key=session_key)
         self.audit.write(
             "apply_chat_admin_update",
             "chat-admin",
-            {"scope": "privanet.updates", "authorization": "automatic"},
+            {"scope": "privanet.updates", "authorization": "interactive-2fa"},
             bool(result.get("ok")),
             str(result.get("error") or result.get("state") or ""),
         )
         return {
             "ok": result.get("ok", False),
             "scope": "privanet.updates",
-            "authorization": "automatic",
+            "authorization": "interactive-2fa",
             "state": result.get("state"),
             "unit": result.get("unit"),
             "error": redact(str(result.get("error"))) if result.get("error") else None,
@@ -765,7 +785,7 @@ class AdminBackend:
         local = self.audit.recent(limit)
         try:
             broker = self.broker_call("audit.recent", {"limit": limit}).get("entries", [])
-        except Exception:
-            broker = []
+        except Exception as exc:
+            broker = [{"ts": int(time.time()), "action": "audit.broker_unavailable", "scope": None, "session": None, "ok": False, "detail": redact(str(exc))}]
         merged = [{**row, "source": "bridge"} for row in local] + [{**row, "source": "broker"} for row in broker]
         return sorted(merged, key=lambda row: int(row.get("ts", 0)), reverse=True)[: max(1, min(limit, 200))]
