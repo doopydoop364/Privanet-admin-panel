@@ -106,14 +106,15 @@ def test_nodes_can_hide_revoked(tmp_path):
 
 
 def test_get_and_diagnose_node(tmp_path):
-    br=FakeBroker(); br.set('admin.nodes.show',{'ok':True,'data':{'nodeId':'n','status':'OFFLINE','jobSlots':0,'currentJobs':0,'pressure':'ELEVATED'},'error':None})
+    br=FakeBroker(); br.set('admin.nodes.show',{'ok':True,'data':{'nodeId':'n','status':'STALE','jobSlots':0,'currentJobs':0,'resources':{'pressure':'ELEVATED'}},'error':None})
     out=backend(tmp_path,broker=br).diagnose_node('node_12345678')
-    assert {'OFFLINE','NO_SLOTS','RESOURCE_PRESSURE'} <= {x['code'] for x in out['diagnosis']}
+    assert {'STALE','NO_SLOTS','RESOURCE_PRESSURE'} <= {x['code'] for x in out['diagnosis']}
 
 
 def test_version_drift(tmp_path):
-    br=FakeBroker(); br.set('admin.nodes.list',{'ok':True,'data':{'nodes':[{'status':'ONLINE','daemonVersion':'1.0','displayName':'a'},{'status':'ONLINE','daemonVersion':'1.1','displayName':'b'}]},'error':None})
-    assert backend(tmp_path,broker=br).version_drift()['drift'] is True
+    br=FakeBroker(); br.set('admin.nodes.list',{'ok':True,'data':{'nodes':[{'status':'ONLINE','daemonVersion':'1.0','protocolVersion':'1','displayName':'a'},{'status':'ONLINE','daemonVersion':'1.1','protocolVersion':'1','displayName':'b'}]},'error':None})
+    out=backend(tmp_path,broker=br).version_drift()
+    assert out['drift'] is False and out['daemonVersionDifferences'] is True
 
 
 def test_restart_calls_capability_broker_action(tmp_path):
@@ -171,17 +172,18 @@ def test_verified_updates_are_automatic_under_update_scope(tmp_path):
 
 def test_chat_admin_self_update_is_typed_and_automatic(tmp_path):
     br=FakeBroker()
-    br.set('update.self_check',{'ok':True,'output':'Installed: 0.3.3.1\nPublished: 0.3.3.1\nStatus: up to date\n','error':None})
+    br.set('update.self_check',{'ok':True,'output':'Installed: 0.3.3.2\nPublished: 0.3.3.2\nStatus: up to date\n','error':None})
     b=backend(tmp_path,broker=br)
     status=b.chat_admin_update_status()
-    assert status['installed']=='0.3.3.1' and status['published']=='0.3.3.1'
+    assert status['installed']=='0.3.3.2' and status['published']=='0.3.3.2'
     assert status['authorization']=='automatic'
     assert br.calls[-1]==('update.self_check',{},'session-default')
     br.set('update.self_apply',{'ok':True,'scope':'privanet.updates','authorization':'automatic','state':'STARTED','unit':'privanet-chat-admin-self-update.service','error':None})
-    out=b.apply_chat_admin_update('mcp_audit123')
+    auth='req_'+'a'*32
+    out=b.apply_chat_admin_update(auth,'mcp_audit123')
     assert out['ok'] is True and out['state']=='STARTED'
-    assert out['scope']=='privanet.updates' and out['authorization']=='automatic'
-    assert br.calls[-1]==('update.self_apply',{},'mcp_audit123')
+    assert out['scope']=='privanet.updates' and out['authorization']=='interactive-2fa'
+    assert br.calls[-1]==('update.self_apply',{'authorization_request_id':auth},'mcp_audit123')
 
 
 def test_privasearch_status_secret_stays_in_broker(tmp_path):
@@ -210,7 +212,7 @@ def test_authorization_round_trip_backend(tmp_path):
 def test_unknown_authorization_scope_rejected(tmp_path):
     with pytest.raises(ValueError): backend(tmp_path).prepare_authorization('root.shell','x','mcp_audit123')
     with pytest.raises(ValueError): backend(tmp_path).prepare_authorization('system.sudo','x','mcp_audit123')
-    with pytest.raises(ValueError): backend(tmp_path).prepare_authorization('privanet.updates','x','mcp_audit123')
+    assert backend(tmp_path,broker=FakeBroker()).prepare_authorization('privanet.updates','x','mcp_audit123') is not None
 
 
 def test_confirmation_backend_carries_authorization_id(tmp_path):
@@ -284,9 +286,9 @@ def test_broker_root_command_is_explicitly_2fa_gated():
 
 
 def test_versions_are_0331():
-    assert 'VERSION = "0.3.3.1"' in Path('agent/core.py').read_text()
-    assert 'VERSION=0.3.3.1' in Path('deploy.sh').read_text()
-    assert json.loads(Path('plugin/plugin.json').read_text())['version']=='0.3.3.1'
+    assert 'VERSION = "0.3.3.2"' in Path('agent/core.py').read_text()
+    assert 'VERSION=0.3.3.2' in Path('deploy.sh').read_text()
+    assert json.loads(Path('plugin/plugin.json').read_text())['version']=='0.3.3.2'
 
 
 def test_updater_supports_four_part_versions_and_legacy_alias():
@@ -336,8 +338,9 @@ def test_broker_capability_survives_transport_session_change(tmp_path, monkeypat
 def test_broker_wrong_capability_scope_is_rejected(tmp_path, monkeypatch):
     import agent.broker as broker
     monkeypatch.setattr(broker,'STATE_DB',str(tmp_path/'broker.sqlite3'))
+    secret=_configure_totp(broker,tmp_path,monkeypatch); code=broker._totp_at(secret,int(time.time())//30)
     prep=broker.handle({'action':'auth.prepare','params':{'scope':'privanet.nodes','reason':'nodes'},'session_key':'mcp_session_A'})
-    broker.handle({'action':'auth.grant','params':{'request_id':prep['requestId'],'duration':'15m'},'session_key':'mcp_session_B'})
+    broker.handle({'action':'auth.grant','params':{'request_id':prep['requestId'],'duration':'15m','totp_code':code},'session_key':'mcp_session_B'})
     with pytest.raises(broker.AuthorizationRequired):
         broker.handle({'action':'service.restart','params':{'service':'node','authorization_request_id':prep['requestId']},'session_key':'mcp_session_C'})
 
@@ -345,8 +348,9 @@ def test_broker_wrong_capability_scope_is_rejected(tmp_path, monkeypatch):
 def test_broker_timed_lease_and_revoke_by_request(tmp_path, monkeypatch):
     import agent.broker as broker
     monkeypatch.setattr(broker,'STATE_DB',str(tmp_path/'broker.sqlite3'))
+    secret=_configure_totp(broker,tmp_path,monkeypatch); code=broker._totp_at(secret,int(time.time())//30)
     prep=broker.handle({'action':'auth.prepare','params':{'scope':'privanet.nodes','reason':'maintenance'},'session_key':'mcp_session_A'})
-    broker.handle({'action':'auth.grant','params':{'request_id':prep['requestId'],'duration':'15m'},'session_key':'mcp_session_B'})
+    broker.handle({'action':'auth.grant','params':{'request_id':prep['requestId'],'duration':'15m','totp_code':code},'session_key':'mcp_session_B'})
     status=broker.handle({'action':'auth.status','params':{'request_id':prep['requestId']},'session_key':'mcp_session_C'})
     assert status['leases'][0]['requestId']==prep['requestId']
     revoked=broker.handle({'action':'auth.revoke_all','params':{'request_id':prep['requestId']},'session_key':'mcp_session_D'})
@@ -378,10 +382,13 @@ def test_broker_self_update_uses_only_fixed_systemd_unit(tmp_path, monkeypatch):
         calls.append((argv,timeout))
         return {'ok':True,'code':0,'stdout':'','stderr':''}
     monkeypatch.setattr(broker,'_run',fake_run)
-    out=broker.handle({'action':'update.self_apply','params':{'command':'id -u','url':'https://example.com/evil.zip'},'session_key':'mcp_session_A'})
+    secret=_configure_totp(broker,tmp_path,monkeypatch); code=broker._totp_at(secret,int(time.time())//30)
+    auth=broker.handle({'action':'auth.prepare','params':{'scope':'privanet.updates','reason':'self update'},'session_key':'mcp_session_A'})
+    broker.handle({'action':'auth.grant','params':{'request_id':auth['requestId'],'duration':'once','totp_code':code},'session_key':'mcp_session_B'})
+    out=broker.handle({'action':'update.self_apply','params':{'authorization_request_id':auth['requestId'],'command':'id -u','url':'https://example.com/evil.zip'},'session_key':'mcp_session_C'})
     assert out['ok'] is True
     assert out['scope']=='privanet.updates'
-    assert out['authorization']=='automatic'
+    assert out['authorization']=='interactive-2fa'
     assert calls==[(['systemctl','start','--no-block','privanet-chat-admin-self-update.service'],30)]
 
 
@@ -426,8 +433,9 @@ def test_confirmation_requires_corresponding_capability(tmp_path, monkeypatch):
 def test_confirmation_survives_session_change_and_is_single_use(tmp_path, monkeypatch):
     import agent.broker as broker
     monkeypatch.setattr(broker,'STATE_DB',str(tmp_path/'broker.sqlite3'))
+    secret=_configure_totp(broker,tmp_path,monkeypatch); code=broker._totp_at(secret,int(time.time())//30)
     auth=broker.handle({'action':'auth.prepare','params':{'scope':'system.packages','reason':'packages'},'session_key':'mcp_session_A'})
-    broker.handle({'action':'auth.grant','params':{'request_id':auth['requestId'],'duration':'15m'},'session_key':'mcp_session_B'})
+    broker.handle({'action':'auth.grant','params':{'request_id':auth['requestId'],'duration':'15m','totp_code':code},'session_key':'mcp_session_B'})
     prep=broker.handle({'action':'confirm.prepare','params':{'action':'package.install','target':'jq','reason':'install jq','authorization_request_id':auth['requestId']},'session_key':'mcp_session_C'})
     granted=broker.handle({'action':'confirm.grant','params':{'request_id':prep['requestId']},'session_key':'mcp_session_D'})
     assert granted['usesRemaining']==1
@@ -444,8 +452,9 @@ def test_destructive_revoke_preserves_once_capability_until_confirmed(tmp_path, 
         if args[:2]==['nodes','revoke']: return {'ok':True,'code':0,'stdout':'revoked','stderr':''}
         raise AssertionError(args)
     monkeypatch.setattr(broker,'_admin',fake_admin)
+    secret=_configure_totp(broker,tmp_path,monkeypatch); code=broker._totp_at(secret,int(time.time())//30)
     auth=broker.handle({'action':'auth.prepare','params':{'scope':'privanet.nodes','reason':'revoke'},'session_key':'mcp_session_A'})
-    broker.handle({'action':'auth.grant','params':{'request_id':auth['requestId'],'duration':'once'},'session_key':'mcp_session_B'})
+    broker.handle({'action':'auth.grant','params':{'request_id':auth['requestId'],'duration':'once','totp_code':code},'session_key':'mcp_session_B'})
     with pytest.raises(broker.ConfirmationRequired):
         broker.handle({'action':'admin.node.revoke','params':{'node_reference':node_id,'authorization_request_id':auth['requestId']},'session_key':'mcp_session_C'})
     assert broker._active_lease('privanet.nodes',auth['requestId'],consume=False) is not None
@@ -460,8 +469,9 @@ def test_destructive_revoke_preserves_once_capability_until_confirmed(tmp_path, 
 def test_confirmation_target_must_match_exactly(tmp_path, monkeypatch):
     import agent.broker as broker
     monkeypatch.setattr(broker,'STATE_DB',str(tmp_path/'broker.sqlite3'))
+    secret=_configure_totp(broker,tmp_path,monkeypatch); code=broker._totp_at(secret,int(time.time())//30)
     auth=broker.handle({'action':'auth.prepare','params':{'scope':'system.packages','reason':'packages'},'session_key':'mcp_session_A'})
-    broker.handle({'action':'auth.grant','params':{'request_id':auth['requestId'],'duration':'15m'},'session_key':'mcp_session_B'})
+    broker.handle({'action':'auth.grant','params':{'request_id':auth['requestId'],'duration':'15m','totp_code':code},'session_key':'mcp_session_B'})
     conf=broker.handle({'action':'confirm.prepare','params':{'action':'package.install','target':'jq','reason':'install jq','authorization_request_id':auth['requestId']},'session_key':'mcp_session_C'})
     broker.handle({'action':'confirm.grant','params':{'request_id':conf['requestId']},'session_key':'mcp_session_D'})
     assert broker._active_confirmation('package.install','curl',conf['requestId'],consume=False) is None
@@ -473,6 +483,15 @@ def _configure_totp(broker, tmp_path, monkeypatch):
     path=tmp_path/'totp.secret'; path.write_text(secret+'\n')
     monkeypatch.setattr(broker,'TOTP_SECRET_PATH',str(path))
     return secret
+
+
+def test_sensitive_scope_grant_requires_totp(tmp_path, monkeypatch):
+    import agent.broker as broker
+    monkeypatch.setattr(broker,'STATE_DB',str(tmp_path/'broker.sqlite3'))
+    monkeypatch.setattr(broker,'TOTP_SECRET_PATH',str(tmp_path/'missing.secret'))
+    prep=broker.handle({'action':'auth.prepare','params':{'scope':'privanet.nodes','reason':'nodes'},'session_key':'mcp_session_A'})
+    with pytest.raises(PermissionError):
+        broker.handle({'action':'auth.grant','params':{'request_id':prep['requestId'],'duration':'once'},'session_key':'mcp_session_B'})
 
 
 def test_sudo_requires_2fa_configuration(tmp_path, monkeypatch):
